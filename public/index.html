@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <title>wsChat</title>
+        <link rel="stylesheet" href="style.css" />
+        <style>
+            .message_username {
+                font-weight: bold;
+                margin-right: 5px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <header>
+                <h1>wsChat</h1>
+                <button class="logout_btn" id="logout_btn">Sair</button>
+            </header>
+
+            <div id="messages" class="messages"></div>
+            <input id="input" class="input" placeholder="Type a message..." />
+        </div>
+
+        <script>
+            let token = localStorage.getItem("chatToken");
+            let username = "";
+
+            if (!token) {
+                username = prompt("Insira um nome de usuário:");
+
+                if (!username) {
+                    alert("Nome de usuário é obrigatório.");
+                    location.reload();
+                }
+            }
+
+            const ws = new WebSocket(
+                token
+                    ? `ws://${location.host}?token=${encodeURIComponent(token)}`
+                    : `ws://${location.host}?username=${encodeURIComponent(
+                          username
+                      )}`
+            );
+
+            // store colors per username
+            const userColors = {};
+
+            function getUserColor(name) {
+                if (!userColors[name]) {
+                    const hue = Math.floor(Math.random() * 360);
+                    userColors[name] = `hsl(${hue}, 70%, 50%)`;
+                }
+                return userColors[name];
+            }
+
+            ws.onmessage = (event) => {
+                const msg = JSON.parse(event.data);
+
+                if (msg.type === "token") {
+                    localStorage.setItem("chatToken", msg.token);
+                }
+
+                if (msg.type === "message") {
+                    const div = document.createElement("div");
+                    div.className = "message";
+
+                    const usernameSpan = document.createElement("span");
+                    usernameSpan.className = "message_username";
+                    usernameSpan.textContent = msg.from + ": ";
+                    usernameSpan.style.color = getUserColor(msg.from);
+                    div.appendChild(usernameSpan);
+
+                    const message = document.createElement("span");
+                    message.className = "message_text";
+                    message.textContent = msg.text;
+                    div.appendChild(message);
+
+                    document.getElementById("messages").appendChild(div);
+                }
+
+                if (msg.type === "user_joined") {
+                    const div = document.createElement("div");
+                    div.textContent = msg.username + " joined the chat.";
+                    div.className = "user_joined";
+                    document.getElementById("messages").appendChild(div);
+                }
+
+                if (msg.type === "user_left") {
+                    const div = document.createElement("div");
+                    div.textContent = msg.username + " left the chat.";
+                    div.className = "user_left";
+                    document.getElementById("messages").appendChild(div);
+                }
+
+                if (msg.type === "error") {
+                    alert("Error: " + msg.message);
+                    ws.close();
+                }
+            };
+
+            document
+                .getElementById("input")
+                .addEventListener("keydown", (e) => {
+                    if (e.key === "Enter") {
+                        if (!e.target.value) return;
+
+                        ws.send(
+                            JSON.stringify({
+                                type: "message",
+                                text: e.target.value,
+                            })
+                        );
+                        e.target.value = "";
+                    }
+                });
+
+            document
+                .getElementById("logout_btn")
+                .addEventListener("click", () => {
+                    const exitConfirm = window.confirm(
+                        "Tem certza que deseja sair? Não será possível recuperar seu nome de usuário."
+                    );
+
+                    if (exitConfirm) {
+                        ws.close();
+                        localStorage.removeItem("chatToken");
+                        location.reload();
+                    }
+                });
+        </script>
+    </body>
+</html>
